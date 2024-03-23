@@ -3,6 +3,7 @@ import { FlatCompat } from '@eslint/eslintrc'
 
 const compat = new FlatCompat()
 
-export default antfu({}, ...compat.config({
+export default antfu({
+}, ...compat.config({
   plugins: ['drizzle'],
 }))

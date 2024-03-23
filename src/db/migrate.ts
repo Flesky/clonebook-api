@@ -1,6 +1,6 @@
 import * as process from 'node:process'
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator'
-import { db } from './index'
+import db from './index'
 
 function main() {
   try {
@@ -8,8 +8,8 @@ function main() {
       migrationsFolder: 'src/db/migrations',
     })
   }
-  catch (error) {
-    console.error(error)
+  catch (err) {
+    console.error(err)
     process.exit(1)
   }
 }
