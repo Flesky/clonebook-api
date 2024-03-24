@@ -4,11 +4,9 @@ import 'dotenv/config'
 import { ZodError } from 'zod'
 import { HTTPException } from 'hono/http-exception'
 import { showRoutes } from 'hono/dev'
-import posts from './routes/posts'
-import auth from './routes/auth'
-import users from './routes/users'
+import routes from './routes'
 
-const app = new Hono()
+const app = new Hono({ strict: false })
 
 app.onError((err, c) => {
   if (err instanceof ZodError)
@@ -29,9 +27,7 @@ app.on(['POST', 'PUT'], '*', async (c, next) => {
     throw new ZodError(res.error.issues)
 })
 
-app.route('/auth', auth)
-app.route('/users', users)
-app.route('/posts', posts)
+app.route('', routes)
 
 const port = 3000
 

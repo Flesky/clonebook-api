@@ -1,47 +1,57 @@
 import { Hono } from 'hono'
-import { getCookie } from 'hono/cookie'
 import { zValidator } from '@hono/zod-validator'
 import { createInsertSchema } from 'drizzle-zod'
-import { eq } from 'drizzle-orm'
+import { and, eq } from 'drizzle-orm'
 import { generateId } from 'lucia'
 import { HTTPException } from 'hono/http-exception'
+import authMiddleware from '../middleware/auth'
 import db from '../db'
-import { posts } from '../db/schema'
+import { postsTable, usersTable } from '../db/schema'
 
-const post = new Hono()
+const postsRoutes = new Hono().basePath('/posts').use(authMiddleware())
 
-post
-  .use(async (c, next) => {
-    const sessionId = getCookie(c, 'auth_session')
-    if (!sessionId)
-      throw new HTTPException(401, { message: 'Not logged in' })
-    await next()
-  })
-  .get(async (c) => {
-    const result = await db.select().from(posts)
-    return c.json(result)
+postsRoutes
+  .get('', async (c) => {
+    const posts = await db.select().from(postsTable)
+    return c.json({ data: posts })
   })
 
-  .post(
-    zValidator('form', createInsertSchema(posts).pick({
-      content: true,
-    })),
-    async (c) => {
-      const body = c.req.valid('form')
-      const query = await db.insert(posts).values({ ...body, id: generateId(15) }).returning()
-      const post = query[0]
-      return c.json({ message: 'Post created', result: post })
-    },
-  )
+  .get('/user/:userId', async (c) => {
+    const { userId } = c.req.param()
 
-  .delete('/:id', async (c) => {
-    const { id } = c.req.param()
-    const query = await db.delete(posts).where(eq(posts.id, id)).returning()
-    const post = query[0]
-    if (!post)
-      return c.notFound()
+    const posts = await db.select().from(postsTable).where(eq(postsTable.userId, userId))
 
-    return c.json({ message: 'Post deleted', result: post })
+    if (!posts.length) {
+      const [user] = await db.select().from(usersTable).where(eq(usersTable.id, userId))
+      if (!user)
+        throw new HTTPException(404, { message: 'User not found' })
+    }
+
+    return c.json({ data: posts })
   })
 
-export default post
+  .post('', zValidator('form', createInsertSchema(postsTable).pick({
+    content: true,
+  })), async (c) => {
+    const { content } = c.req.valid('form')
+    await db.insert(postsTable).values(
+      { id: generateId(15), content, userId: c.get('user').id },
+    )
+    return c.json({ message: 'Post created' })
+  })
+
+  .delete('/:postId', async (c) => {
+    const { postId } = c.req.param()
+    const [post] = await db.delete(postsTable).where(
+      and(eq(postsTable.id, postId), eq(postsTable.userId, c.get('user').id)),
+    ).returning()
+    if (!post) {
+      // TODO: Check if user created that post
+
+      throw new HTTPException(404, { message: 'Post not found' })
+    }
+
+    return c.json({ message: 'Post deleted' })
+  })
+
+export default postsRoutes
